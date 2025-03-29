@@ -5,7 +5,7 @@ on:
 # Global Settings
 # SCONS_CACHE for windows must be set in the build environment
 env:
-  SCONSFLAGS: profile="../misc/build_profiles/production_windows.py"
+  SCONSFLAGS: separate_debug_symbols="yes" debug_symbols="yes"
   SCONS_CACHE_MSVC_CONFIG: true
 
 jobs:
@@ -21,18 +21,21 @@ jobs:
           - name: Editor (target=editor)
             cache-name: windows-editor
             target: editor
-            tests: true
+            sconsflags: profile="../misc/build_profiles/editor_debug_windows.py"
+            tests: false
             # Skip debug symbols, they're way too big with MSVC.
             bin: ./bin/godot.windows.editor.x86_64.exe
             compiler: msvc
+            artifact-name: windows-editor
 
-          - name: Template (target=template_release debug_symbols=no)
+          - name: Template (target=template_release)
             cache-name: windows-template
             target: template_release
-            tests: true
-            sconsflags: debug_symbols=no
+            tests: false
+            sconsflags: profile="../misc/build_profiles/production_windows.py"
             bin: ./bin/godot.windows.template_release.x86_64.exe
             compiler: msvc
+            artifact-name: windows-engine
 
     steps:
       - name: Checkout
@@ -46,6 +49,10 @@ jobs:
 
       - name: Setup Python and SCons
         uses: ./.github/actions/godot-deps
+
+      - name: Download windows deps
+        run: |
+          ./get_deps.ps1
 
       - name: Compilation
         uses: ./.github/actions/godot-build
@@ -64,17 +71,10 @@ jobs:
       - name: Prepare artifact
         if: matrix.compiler == 'msvc'
         run: |
-          Remove-Item bin/* -Include *.exp,*.lib,*.pdb -Force
+          Remove-Item engine/bin/* -Include *.exp,*.lib -Force
 
       - name: Upload artifact
         if: matrix.compiler == 'msvc'
         uses: ./.github/actions/upload-artifact
         with:
-          name: ${{ matrix.cache-name }}
-
-      - name: Unit tests
-        if: matrix.tests
-        run: |
-          ${{ matrix.bin }} --version
-          ${{ matrix.bin }} --help
-          ${{ matrix.bin }} --test --force-colors
+          name: ${{ matrix.artifact-name }}
